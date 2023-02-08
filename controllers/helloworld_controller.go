@@ -18,7 +18,11 @@ package controllers
 
 import (
 	"context"
+	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1beta1 "k8s.io/apimachinery/pkg/apis/meta/v1beta1"
+	"k8s.io/apimachinery/pkg/types"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -53,7 +57,7 @@ func (r *HelloWorldReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	//我的逻辑
 	hellWorld := &testv1alpha1.HelloWorld{}
 
-	//kubectl get ns | grep NamespacedName
+	//相当于kubectl get ns | grep NamespacedName
 	err := r.Client.Get(ctx, req.NamespacedName, hellWorld)
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -64,7 +68,32 @@ func (r *HelloWorldReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return ctrl.Result{}, err
 	}
 
-	//nginxDeployFound := &appsv1.Deployment{}
+	//确认cr下的deploy是否存在
+	nginxDeployFound := &appsv1.Deployment{}
+
+	//获取当前ns下面的deploy资源
+	errDeploy := r.Client.Get(ctx, types.NamespacedName{
+		Namespace: hellWorld.Namespace,
+		Name:      hellWorld.Namespace,
+	}, nginxDeployFound)
+	if errDeploy != nil {
+		//不存在的话，就需要创建deployment
+		if errors.IsNotFound(errDeploy) {
+			nginxDeploy := &appsv1.Deployment{
+				//元数据信息
+				ObjectMeta: metav1.ObjectMeta{
+					Name: hellWorld.Name,
+					Namespace: hellWorld.Namespace,
+				},
+
+				//cr的spec个性信息
+				Spec: appsv1.DeploymentSpec{
+					Replicas: &hellWorld.Spec.Size,
+
+				}
+			}
+		}
+	}
 
 	return ctrl.Result{}, nil
 }
