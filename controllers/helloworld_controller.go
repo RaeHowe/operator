@@ -19,10 +19,11 @@ package controllers
 import (
 	"context"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	metav1beta1 "k8s.io/apimachinery/pkg/apis/meta/v1beta1"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -76,22 +77,60 @@ func (r *HelloWorldReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		Namespace: hellWorld.Namespace,
 		Name:      hellWorld.Namespace,
 	}, nginxDeployFound)
+
 	if errDeploy != nil {
 		//不存在的话，就需要创建deployment
 		if errors.IsNotFound(errDeploy) {
 			nginxDeploy := &appsv1.Deployment{
 				//元数据信息
 				ObjectMeta: metav1.ObjectMeta{
-					Name: hellWorld.Name,
+					Name:      hellWorld.Name,
 					Namespace: hellWorld.Namespace,
 				},
 
 				//cr的spec个性信息
 				Spec: appsv1.DeploymentSpec{
 					Replicas: &hellWorld.Spec.Size,
+					Selector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							"hello_name": hellWorld.Name,
+						},
+					},
 
-				}
+					//deployment里面的template，deploy控制的pod的数量，如果不满足replica数量的话，就会根据这个template去创建一个pod出来
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{
+							Labels: map[string]string{
+								"hello_name": hellWorld.Name,
+							},
+						},
+
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Image: "nginx",
+									Name:  "nginx",
+									Ports: []corev1.ContainerPort{
+										{
+											ContainerPort: 80,
+											Name:          "nginx",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
 			}
+
+			controllerutil.SetControllerReference(hellWorld, nginxDeploy, r.Scheme)
+			if err1 := r.Client.Create(ctx, nginxDeploy); err1 != nil {
+				return ctrl.Result{}, err1
+			}
+
+			return ctrl.Result{Requeue: true}, nil
+		} else {
+			return ctrl.Result{}, errDeploy
 		}
 	}
 
