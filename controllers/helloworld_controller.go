@@ -134,6 +134,17 @@ func (r *HelloWorldReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		}
 	}
 
+	//nginxDeployFound.Spec.Replicas是从集群拿到的pod数量，hellWorld.Spec.Size是期望数量
+	if *nginxDeployFound.Spec.Replicas != hellWorld.Spec.Size {
+		nginxDeployFound.Spec.Replicas = &hellWorld.Spec.Size
+		//设置完期望数量之后，更新deployment
+		if err = r.Update(ctx, nginxDeployFound); err != nil {
+			return ctrl.Result{}, err
+		}
+	}
+
+	//如果数量
+
 	return ctrl.Result{}, nil
 }
 
