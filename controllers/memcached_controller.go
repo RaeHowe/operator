@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -27,6 +28,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	cLog "log"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -75,7 +77,7 @@ func (r *MemcachedReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	cLog.Print(" memcached的ns信息:")
 	cLog.Println(memcached.GetNamespace())
 
-	//获取到ns下面的资源。主要是看ns下面指定的deploy是否存在
+	//获取到ns下面的资源，判断ns下面memcached这个cr资源是否存在
 	err := r.Get(ctx, req.NamespacedName, memcached)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
@@ -181,7 +183,97 @@ func (r *MemcachedReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		Name:      memcached.Name,
 	}, found)
 
+	if err != nil && apierrors.IsNotFound(err) {
+		dep, err := r.deploymentForMemcached(memcached)
+		if err != nil {
+
+		}
+	}
+
 	return ctrl.Result{}, nil
+}
+
+const MemcachedImage = "memcached:1.4.36-alpine"
+
+func (r *MemcachedReconciler) deploymentForMemcached(memcached *cachev1alpha1.Memcached) (*appsv1.Deployment, error) {
+	ls := labelsForMemcached(memcached.Name)
+	replicas := memcached.Spec.Size //获取到memcached的副本数（从memcached的cr.yaml里面拿到的）
+
+	deploy := &appsv1.Deployment{
+		//deploy的元数据信息
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      memcached.Name,
+			Namespace: memcached.Namespace,
+		},
+
+		//deploy的spec信息
+		Spec: appsv1.DeploymentSpec{
+			Replicas: &replicas, //直接从cr.yaml里面拿到的cr副本数放置到deploy里面来
+			Selector: &metav1.LabelSelector{
+				/**
+				spec:
+				  selector:
+					matchLabels:
+					  app.kubernetes.io/component: discovery
+					  app.kubernetes.io/instance: tidb-6akptd44c4
+					  app.kubernetes.io/managed-by: tidb-operator
+					  app.kubernetes.io/name: tidb-cluster
+				*/
+				MatchLabels: ls,
+			},
+
+			//deploy的yaml文件里面spec.template对应的内容
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: ls,
+				}, //container的name
+				Spec: corev1.PodSpec{
+					//pod亲和性方面配置
+					Affinity: &corev1.Affinity{
+						NodeAffinity: &corev1.NodeAffinity{
+							RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+								NodeSelectorTerms: []corev1.NodeSelectorTerm{
+									{
+										MatchExpressions: []corev1.NodeSelectorRequirement{
+											{
+												Key:      "kubernetes.io/arch",
+												Operator: "In",
+												Values:   []string{"amd64", "arm64", "ppc64le", "s390x"},
+											},
+											{
+												Key:      "kubernetes.io/os",
+												Operator: "In",
+												Values:   []string{"linux"},
+											},
+										},
+									},
+								},
+							},
+						},
+						PodAffinity:     nil,
+						PodAntiAffinity: nil,
+					},
+					//定义pod和container的权限和访问控制
+					/*
+						SecurityContext 可以应用于 Container 和 Pod 维度：
+							在 Pod 上设置的安全性配置会应用到 Pod 中所有 Container 上，并且会还会影响 Volume
+							在 Container 上设置的安全性配置仅适用于该容器本身，不会影响到其他容器以及 Pod 的 Volume
+					*/
+					SecurityContext: &corev1.PodSecurityContext{},
+				},
+			},
+		},
+	}
+}
+
+func labelsForMemcached(name string) map[string]string {
+	var imageTag = strings.Split(MemcachedImage, ":")[1] //1.4.36-alpine
+
+	return map[string]string{"app.kubernetes.io/name": "Memcached",
+		"app.kubernetes.io/instance":   name,
+		"app.kubernetes.io/version":    imageTag,
+		"app.kubernetes.io/part-of":    "memcached-operator",
+		"app.kubernetes.io/created-by": "controller-manager"}
 }
 
 // 执行在删除cr之前的一些必要操作
