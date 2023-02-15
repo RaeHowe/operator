@@ -1,19 +1,19 @@
-domain: raehowe.com
+domain: example.com
 layout:
-- go.kubebuilder.io/v3
+- go.kubebuilder.io/v4-alpha
 plugins:
   manifests.sdk.operatorframework.io/v2: {}
   scorecard.sdk.operatorframework.io/v2: {}
 projectName: operator
-repo: github.com/RaeHowe/operator
+repo: github.com/example/memcached-operator
 resources:
 - api:
     crdVersion: v1
     namespaced: true
   controller: true
-  domain: raehowe.com
-  group: test
-  kind: HelloWorld
-  path: github.com/RaeHowe/operator/api/v1alpha1
+  domain: example.com
+  group: cache
+  kind: Memcached
+  path: github.com/example/memcached-operator/api/v1alpha1
   version: v1alpha1
 version: "3"

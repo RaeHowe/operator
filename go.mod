@@ -1,4 +1,4 @@
-module github.com/RaeHowe/operator
+module github.com/example/memcached-operator
 
 go 1.19
 

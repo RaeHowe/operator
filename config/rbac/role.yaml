@@ -6,9 +6,9 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
-  - test.raehowe.com
+  - cache.example.com
   resources:
-  - helloworlds
+  - memcacheds
   verbs:
   - create
   - delete
@@ -18,15 +18,15 @@ rules:
   - update
   - watch
 - apiGroups:
-  - test.raehowe.com
+  - cache.example.com
   resources:
-  - helloworlds/finalizers
+  - memcacheds/finalizers
   verbs:
   - update
 - apiGroups:
-  - test.raehowe.com
+  - cache.example.com
   resources:
-  - helloworlds/status
+  - memcacheds/status
   verbs:
   - get
   - patch

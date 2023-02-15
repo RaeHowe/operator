@@ -23,46 +23,44 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
-// HelloWorldSpec defines the desired state of HelloWorld
-type HelloWorldSpec struct {
+// MemcachedSpec defines the desired state of Memcached
+type MemcachedSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	Size int32 `json:"size"`
-
-	MaxCpu int `json:"maxCpu"`
-	MinCpu int `json:"minCpu"`
+	Size          int32 `json:"size,omitempty"`
+	ContainerPort int32 `json:"containerPort,omitempty"`
 }
 
-// HelloWorldStatus defines the observed state of HelloWorld
-type HelloWorldStatus struct {
+// MemcachedStatus defines the observed state of Memcached
+type MemcachedStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	Nodes []string `json:"nodes"`
+	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type" protobuf:"bytes,1,rep,name=conditions"`
 }
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
 
-// HelloWorld is the Schema for the helloworlds API
-type HelloWorld struct {
+// Memcached is the Schema for the memcacheds API
+type Memcached struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   HelloWorldSpec   `json:"spec,omitempty"`
-	Status HelloWorldStatus `json:"status,omitempty"`
+	Spec   MemcachedSpec   `json:"spec,omitempty"`
+	Status MemcachedStatus `json:"status,omitempty"`
 }
 
 //+kubebuilder:object:root=true
 
-// HelloWorldList contains a list of HelloWorld
-type HelloWorldList struct {
+// MemcachedList contains a list of Memcached
+type MemcachedList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []HelloWorld `json:"items"`
+	Items           []Memcached `json:"items"`
 }
 
 func init() {
-	SchemeBuilder.Register(&HelloWorld{}, &HelloWorldList{})
+	SchemeBuilder.Register(&Memcached{}, &MemcachedList{})
 }

@@ -1,27 +1,27 @@
-# permissions for end users to view helloworlds.
+# permissions for end users to view memcacheds.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   labels:
     app.kubernetes.io/name: clusterrole
-    app.kubernetes.io/instance: helloworld-viewer-role
+    app.kubernetes.io/instance: memcached-viewer-role
     app.kubernetes.io/component: rbac
     app.kubernetes.io/created-by: operator
     app.kubernetes.io/part-of: operator
     app.kubernetes.io/managed-by: kustomize
-  name: helloworld-viewer-role
+  name: memcached-viewer-role
 rules:
 - apiGroups:
-  - test.raehowe.com
+  - cache.example.com
   resources:
-  - helloworlds
+  - memcacheds
   verbs:
   - get
   - list
   - watch
 - apiGroups:
-  - test.raehowe.com
+  - cache.example.com
   resources:
-  - helloworlds/status
+  - memcacheds/status
   verbs:
   - get
