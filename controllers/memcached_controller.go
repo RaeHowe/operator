@@ -38,7 +38,13 @@ import (
 	cachev1alpha1 "github.com/example/memcached-operator/api/v1alpha1"
 )
 
+/*
+	k8s.io/api/apps/v1包里面包含了deployment, stateful set, replicaset
+	k8s.io/api/core/v1包里面包含了除deployment, stateful set, replicaset之外大部分的系统资源，例如pod,node,cm,
+*/
+
 const memcachedFinalizer = "cache.example.com/finalizer"
+const MemcachedImage = "memcached:1.4.36-alpine"
 
 // Definitions to manage status conditions
 const (
@@ -193,8 +199,6 @@ func (r *MemcachedReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	return ctrl.Result{}, nil
 }
 
-const MemcachedImage = "memcached:1.4.36-alpine"
-
 func (r *MemcachedReconciler) deploymentForMemcached(memcached *cachev1alpha1.Memcached) (*appsv1.Deployment, error) {
 	ls := labelsForMemcached(memcached.Name)
 	replicas := memcached.Spec.Size //获取到memcached的副本数（从memcached的cr.yaml里面拿到的）
@@ -260,10 +264,30 @@ func (r *MemcachedReconciler) deploymentForMemcached(memcached *cachev1alpha1.Me
 							在 Container 上设置的安全性配置仅适用于该容器本身，不会影响到其他容器以及 Pod 的 Volume
 					*/
 					SecurityContext: &corev1.PodSecurityContext{},
+					Containers: []corev1.Container{
+						{
+							Image:           MemcachedImage,
+							Name:            "memcached",
+							ImagePullPolicy: corev1.PullIfNotPresent,
+							Ports: []corev1.ContainerPort{
+								{
+									ContainerPort: memcached.Spec.ContainerPort,
+									Name:          "memcached",
+								},
+							},
+							Command: []string{"memcached", "-m=64", "-o", "modern", "-v"},
+						},
+					},
 				},
 			},
 		},
 	}
+
+	if err := ctrl.SetControllerReference(memcached, deploy, r.Scheme); err != nil {
+		return nil, err
+	}
+
+	return deploy, nil
 }
 
 func labelsForMemcached(name string) map[string]string {
