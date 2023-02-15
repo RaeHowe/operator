@@ -29,6 +29,7 @@ import (
 	cLog "log"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"strings"
+	"time"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -41,6 +42,7 @@ import (
 /*
 	k8s.io/api/apps/v1包里面包含了deployment, stateful set, replicaset
 	k8s.io/api/core/v1包里面包含了除deployment, stateful set, replicaset之外大部分的系统资源，例如pod,node,cm,
+	k8s.io/apimachinery/pkg/api/meta包的主要功能是设置一个资源的status.conditions的状态值
 */
 
 const memcachedFinalizer = "cache.example.com/finalizer"
@@ -99,6 +101,8 @@ func (r *MemcachedReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 	//如果cr的status信息不是期望的话
 	if memcached.Status.Conditions == nil || len(memcached.Status.Conditions) == 0 {
+		//SetStatusCondition方法主要是设置pod,deployment等资源里面status.Condition里面的状态值
+		//可以了解一下Condition
 		meta.SetStatusCondition(&memcached.Status.Conditions, metav1.Condition{Type: typeAvailableMemcached, Status: metav1.ConditionUnknown, Reason: "Reconciling", Message: "Starting reconciliation"})
 		if err = r.Status().Update(ctx, memcached); err != nil {
 			cLog.Fatalln("Failed to update Memcached status")
@@ -183,7 +187,7 @@ func (r *MemcachedReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 	//Check if the deployment already exists, if not create a new one
 	found := &appsv1.Deployment{}
-	//这个操作相当于就是从ns里面拿Deployment类型的资源
+	//这个操作相当于就是从ns里面拿Deployment类型的资源，拿到的资源给到deploy这个变量
 	err = r.Get(ctx, types.NamespacedName{
 		Namespace: memcached.Namespace,
 		Name:      memcached.Name,
@@ -192,9 +196,81 @@ func (r *MemcachedReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	if err != nil && apierrors.IsNotFound(err) {
 		dep, err := r.deploymentForMemcached(memcached)
 		if err != nil {
+			//部署deploy失败
+			cLog.Println(err.Error())
+			cLog.Println("Failed to define new Deployment resource for Memcached")
 
+			//部署deploy失败的话，就把memcached的conditions状态修改一下
+			meta.SetStatusCondition(&memcached.Status.Conditions, metav1.Condition{
+				Type:    typeAvailableMemcached,
+				Status:  metav1.ConditionFalse,
+				Reason:  "Reconciling",
+				Message: fmt.Sprintf("Failed to create Deployment for the custom resource (%s): (%s)", memcached.Name, err),
+			})
+
+			//修改协调器状态
+			if err = r.Status().Update(ctx, memcached); err != nil {
+				cLog.Println(err.Error())
+				cLog.Println("Failed to update Memcached status")
+				return ctrl.Result{}, err
+			}
+
+			return ctrl.Result{}, err
 		}
+
+		//部署deploy成功
+		cLog.Println("Creating a new Deployment",
+			"Deployment.Namespace", dep.Namespace, "Deployment.Name", dep.Name)
+		//在k8s集群里面创建一个资源出来
+		if err = r.Create(ctx, dep); err != nil {
+			cLog.Println(err.Error())
+			cLog.Println("Failed to create new Deployment",
+				"Deployment.Namespace", dep.Namespace, "Deployment.Name", dep.Name)
+			return ctrl.Result{}, err
+		}
+
+		return ctrl.Result{RequeueAfter: time.Minute}, nil
+	} else if err != nil {
+		//从集群拿deploy资源获取失败，但并不是deploy不存在的原因
+		cLog.Println(err.Error())
+		cLog.Println("Failed to get Deployment")
+		return ctrl.Result{}, err
 	}
+
+	//下面判断部署出来的memcached数量是否cr里面要求的数量保持一致
+	size := memcached.Spec.Size //cr里面要求的size，以这个为准
+	if *found.Spec.Replicas != size {
+		//如果不一致的话，把deployment的size设置为cr要求的数量。然后直接通过协调器去更新
+		found.Spec.Replicas = &size
+		if err = r.Update(ctx, found); err != nil {
+			cLog.Println(err.Error())
+			cLog.Println("Failed to update Deployment",
+				"Deployment.Namespace", found.Namespace, "Deployment.Name", found.Name)
+
+			//更新失败的话，就修改memcached的状态为失败状态
+			if err := r.Get(ctx, req.NamespacedName, memcached); err != nil {
+				return ctrl.Result{}, err
+			}
+
+			//修改状态
+			meta.SetStatusCondition(&memcached.Status.Conditions, metav1.Condition{
+				Type:    typeAvailableMemcached,
+				Status:  metav1.ConditionFalse,
+				Reason:  "Resizing",
+				Message: fmt.Sprintf("Failed to update the size for the custom resource (%s): (%s)", memcached.Name, err),
+			})
+
+			if err := r.Status().Update(ctx, memcached); err != nil {
+				return ctrl.Result{}, err
+			}
+
+			return ctrl.Result{}, err
+		}
+
+		return ctrl.Result{Requeue: true}, nil
+	}
+
+	//
 
 	return ctrl.Result{}, nil
 }
