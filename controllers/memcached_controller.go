@@ -270,7 +270,17 @@ func (r *MemcachedReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{Requeue: true}, nil
 	}
 
-	//
+	//如果都成功了，就设置一个success状态
+	meta.SetStatusCondition(&memcached.Status.Conditions, metav1.Condition{
+		Type:    typeAvailableMemcached,
+		Status:  metav1.ConditionTrue,
+		Reason:  "Reconciling",
+		Message: fmt.Sprintf("Deployment for custom resource (%s) with %d replicas created successfully", memcached.Name, size),
+	})
+
+	if err := r.Status().Update(ctx, memcached); err != nil {
+		return ctrl.Result{}, err
+	}
 
 	return ctrl.Result{}, nil
 }
@@ -384,7 +394,10 @@ func (r *MemcachedReconciler) doFinalizerOperationsForMemcached(cr *cachev1alpha
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *MemcachedReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	// SetupWithManager里面定义的内容，是你的operator涉及到了对哪些资源进行操作的资源集合
 	return ctrl.NewControllerManagedBy(mgr).
+		//NewControllerManagedBy
 		For(&cachev1alpha1.Memcached{}).
+		Owns(&appsv1.Deployment{}).
 		Complete(r)
 }
