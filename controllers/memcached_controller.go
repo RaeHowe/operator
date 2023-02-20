@@ -78,7 +78,6 @@ type MemcachedReconciler struct {
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.13.0/pkg/reconcile
 func (r *MemcachedReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = log.FromContext(ctx)
-
 	//实例化一个自己定义的资源对象：memcached
 	memcached := &cachev1alpha1.Memcached{}
 
